@@ -1,3 +1,4 @@
+# This part of code is taken mostly from keras examples (see Mr Kensert's MPNN implementation), though it is not keras implementation of course
 
 import torch
 from torch import nn
