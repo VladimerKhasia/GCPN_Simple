@@ -1,83 +1,25 @@
-import os
-import math
-import warnings
-from functools import reduce
-from collections import defaultdict
-
-import networkx as nx
-
-from matplotlib import pyplot as plt
-import torch
-
-plt.switch_backend("agg")
-
-import re
-import types
-import inspect
-from collections import defaultdict
-from contextlib import contextmanager
-
-import copy
-import logging
-import warnings
-from collections import defaultdict, deque
-import os
-import sys
-import inspect
-import warnings
-from collections.abc import Sequence
-
 import torch
 from torch import nn
 from torch.nn import functional as F
 import torch
 from torch.nn import functional as F
+from torchvision.datasets.utils import download_url
 
-import networkx as nx
-from rdkit import Chem
 from rdkit.Chem import RDConfig, Descriptors
-
-from tqdm import tqdm
-
-from torch_scatter import scatter_add, scatter_max, scatter_min,scatter_mean        
-from torch_scatter.composite import scatter_log_softmax, scatter_softmax
-from collections import Mapping, Sequence
-
-from rdkit import RDLogger
-
-from decorator import decorator
-
-import math
-import warnings
-
-from matplotlib import pyplot as plt
-from rdkit import Chem, RDLogger
-from rdkit.Chem.Scaffolds import MurckoScaffold
-import torch
-import inspect
-from decorator import decorator
-import sys
-
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import warnings
 from rdkit import Chem
 from rdkit import RDLogger
 from rdkit.Chem.Draw import IPythonConsole
 from rdkit.Chem.Draw import MolsToGridImage
+from rdkit import Chem, RDLogger
+from rdkit.Chem.Scaffolds import MurckoScaffold
 
-from torchvision.datasets.utils import download_url
+import networkx as nx
+import warnings
+from collections.abc import Sequence
 
-warnings.filterwarnings("ignore")
-RDLogger.DisableLog("rdApp.*")
-
-np.random.seed(42)
-
-url = "https://deepchemdata.s3-us-west-1.amazonaws.com/datasets/BBBP.csv"
-download_url(url, '.', "BBBP.csv")
-df = pd.read_csv("BBBP.csv")
-
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 
 atomsymbols = ["Null",
     "H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne", "Na", "Mg", "Al", "Si", "P", "S", "Cl", "Ar", "K",
@@ -182,7 +124,12 @@ bond_featurizer = BondFeaturizer(
 
 
 def molecule_from_smiles(smiles):
+    # MolFromSmiles(m, sanitize=True) should be equivalent to
+    # MolFromSmiles(m, sanitize=False) -> SanitizeMol(m) -> AssignStereochemistry(m, ...)
     molecule = Chem.MolFromSmiles(smiles, sanitize=False)
+
+    # If sanitization is unsuccessful, catch the error, and try again without
+    # the sanitization step that caused the error
     flag = Chem.SanitizeMol(molecule, catchErrors=True)
     if flag != Chem.SanitizeFlags.SANITIZE_NONE:
         Chem.SanitizeMol(molecule, sanitizeOps=Chem.SanitizeFlags.SANITIZE_ALL ^ flag)
@@ -192,7 +139,7 @@ def molecule_from_smiles(smiles):
 
 
 def graph_from_molecule(molecule):
-  
+    # Initialize graph
     atom_features = []
     bond_features = []
     pair_indices = []
@@ -200,6 +147,7 @@ def graph_from_molecule(molecule):
     for atom in molecule.GetAtoms():
         atom_features.append(atom_featurizer.encode(atom))
 
+        # Add self-loops
         pair_indices.append([atom.GetIdx(), atom.GetIdx()])
         bond_features.append(bond_featurizer.encode(None))
 
@@ -212,41 +160,60 @@ def graph_from_molecule(molecule):
 
 
 def graphs_from_smiles(smiles_list):
- 
+    # Initialize graphs
     atom_features_list = []
     bond_features_list = []
     pair_indices_list = []
+
+    edge_weights = [] 
+    num_nodes = []
+    num_relation = []
 
     for smiles in smiles_list:
         molecule = molecule_from_smiles(smiles)
         atom_features, bond_features, pair_indices = graph_from_molecule(molecule)
 
+        num_atoms = len(atom_features[:, 1])
+        num_bonds = len(pair_indices[:, 1])
+        a = [0]*len(bond_features[:, 1])
+        
         atom_features_list.append(atom_features)
         bond_features_list.append(bond_features)
         pair_indices_list.append(pair_indices)
 
+        num_nodes.append(num_atoms)
+        num_relation.append(num_bonds)
+        edge_weights.append([a.insert(i, j+1) for i in range(len(a)) for j in range(4) if bond_features[i, j]==1.0 ])
+
     # These are not allways the same size, of course
-    return (                      
-        atom_features_list,                        #edge_list, edge_weight, num_node, num_relation, edge_feature)
-        bond_features_list,
-        pair_indices_list,
+    return (    
+        ### TODO implementation should be applicable for variadic tensor sizes :
+
+        #torch.tensor(pair_indices_list),   # edge_list    #edge_list, edge_weight, num_node, num_relation, edge_feature)
+       
+        #torch.tensor(edge_weights),        # edge_weights
+        #torch.tensor(num_nodes),           # number of nodes
+        #torch.tensor(num_relation),        # num_relation, not allways number of edges
+                             
+        #torch.tensor(bond_features_list),  # edge features 
+        #torch.tensor(atom_features_list),  # atom features
     )
 
 
 # Shuffle array of indices ranging from 0 to 2049
 permuted_indices = np.random.permutation(np.arange(df.shape[0]))
 
-# Train set = 80 % 
+# Train set: 80 % of data
 train_index = permuted_indices[: int(df.shape[0] * 0.8)]
 x_train = graphs_from_smiles(df.iloc[train_index].smiles)
 y_train = df.iloc[train_index].p_np
 
-# Valid set = 19 % 
+# Valid set: 19 % of data
 valid_index = permuted_indices[int(df.shape[0] * 0.8) : int(df.shape[0] * 0.99)]
 x_valid = graphs_from_smiles(df.iloc[valid_index].smiles)
 y_valid = df.iloc[valid_index].p_np
 
-# Test set = 1 % 
+# Test set: 1 % of data
 test_index = permuted_indices[int(df.shape[0] * 0.99) :]
 x_test = graphs_from_smiles(df.iloc[test_index].smiles)
 y_test = df.iloc[test_index].p_np
