@@ -1,5 +1,3 @@
-# This part of code is taken mostly from keras examples (see Mr Kensert's MPNN implementation), though it is not keras implementation of course
-
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -22,10 +20,6 @@ from collections.abc import Sequence
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-
-warnings.filterwarnings("ignore")
-RDLogger.DisableLog("rdApp.*")
-np.random.seed(42)
 
 url = "https://deepchemdata.s3-us-west-1.amazonaws.com/datasets/BBBP.csv"
 download_url(url, '.', "BBBP.csv")
