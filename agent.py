@@ -1,3 +1,6 @@
+# Graph Convolutional Policy Network for Goal-Directed Molecular Graph Generation:
+# https://papers.nips.cc/paper/7877-graph-convolutional-policy-network-for-goal-directed-molecular-graph-generation.pdf
+
 from .embedmodel import RelationalGCN 
 from .data import *
 
@@ -77,8 +80,6 @@ class ReusableLayers(nn.Module):
 
 class GCPN(nn.Module):
     """ 
-    Graph Convolutional Policy Network for Goal-Directed Molecular Graph Generation:
-        https://papers.nips.cc/paper/7877-graph-convolutional-policy-network-for-goal-directed-molecular-graph-generation.pdf
     TODO:
         graph representation model created outside
         set of all possible atom types
